@@ -1,12 +1,12 @@
-const express = require('express')
-const app = express()
+const express = require('express');
+const app = express();
 
-app.get('/', (req, res) => res.send('Hello World!'))
+app.get('/', function(req, res){res.send('Hello World!');});
 
 app.post('/', function(req, res){
 	console.log("post request received!");
 	res.send("This is a post endpoint!");
 });
 
-app.listen(80, () => console.log('Example app listening on port 3000!'))
+app.listen(80, function(){console.log('Example app listening on port 3000!');});
 
