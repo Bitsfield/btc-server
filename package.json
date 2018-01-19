@@ -1,0 +1,15 @@
+{
+  "name": "ekoinx",
+  "version": "1.0.0",
+  "description": "Ekoinx Bitcoin Server",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Okezie Arukwe",
+  "license": "ISC",
+  "dependencies": {
+    "bitcoinjs-lib": "^3.3.2",
+    "express": "^4.16.2"
+  }
+}
