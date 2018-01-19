@@ -8,5 +8,5 @@ app.post('/', function(req, res){
 	res.send("This is a post endpoint!");
 });
 
-app.listen(80, function(){console.log('Example app listening on port 3000!');});
+app.listen(process.env.PORT, () => console.log('EKOINX BTC SERVER RUNNING. LISTENING ON PORT: ' + process.env.PORT));
 
