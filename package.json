@@ -8,6 +8,7 @@
   },
   "author": "Okezie Arukwe",
   "license": "ISC",
+  "engines":{"node": "8.5.0"}, 
   "dependencies": {
     "bitcoinjs-lib": "^3.3.2",
     "express": "^4.16.2"
