@@ -87,24 +87,24 @@ Date.prototype.toMysqlFormat = function()
     + utils.twoDigits(this.getUTCSeconds());
 };
 
-const CronJob = require('cron').CronJob;
-const dispatcher = require('./modules/dispatcher.js');
-const cron = '0/1 * * * * * *';
+// const CronJob = require('cron').CronJob;
+// const dispatcher = require('./modules/dispatcher.js');
+// const cron = '0/1 * * * * * *';
 
-new CronJob(
-	cron,
-	function()
-	{
-		console.log('Job triggered! every five minutes!', new Date());
-		dispatcher.dispatch();
-	},
-	function()
-	{
-		console.log("The dispatcher job has stopped!!!!! Someone should investigate why!");
-	}, 
-	true, //start this job right away!
-	'Africa/Lagos'	//that's the timezone baybee!
-);
+// new CronJob(
+// 	cron,
+// 	function()
+// 	{
+// 		console.log('Job triggered! every five minutes!', new Date());
+// 		dispatcher.dispatch();
+// 	},
+// 	function()
+// 	{
+// 		console.log("The dispatcher job has stopped!!!!! Someone should investigate why!");
+// 	}, 
+// 	true, //start this job right away!
+// 	'Africa/Lagos'	//that's the timezone baybee!
+// );
 
 app.listen(process.env.PORT, () => console.log('EKOINX BTC SERVER RUNNING. LISTENING ON PORT: ' + process.env.PORT));
 
