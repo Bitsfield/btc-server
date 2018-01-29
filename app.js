@@ -1,9 +1,11 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
-var helmet = require('helmet');
-var compression = require('compression');
-var crypter = require('./modules/crypt.js');
-var save = require('./modules/save-transaction.js');
+const helmet = require('helmet');
+const compression = require('compression');
+
+const utils = require('./modules/utils.js');
+const processor = require('./modules/processor.js');
 
 const app = express();
 
@@ -15,10 +17,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //default homepage
 app.get('/', function(req, res) { res.send("Hello Friend!"); } );
 
+//default homepage
+app.get('/test', function(req, res) 
+{
+	console.log("testing!!!!!!!1");
+	processor.test()
+	res.send("testing.....!!!!!!!");
+});
+
 //get app status
 app.get('/status', function(req, res)
 {
-	doTestCrypt();
+	utils.doTestCrypt();
 	console.log("I'm Up!!!");
 	res.json(
 		{
@@ -30,118 +40,62 @@ app.get('/status', function(req, res)
 //generate token endpoint
 app.get('/token/:value/:addy/:userId/:email', function(request, response)
 {
-	var params = request.params;
-	if(!validateRequest(params))
+	const params = request.params;
+	if(!utils.validateRequest(params))
 	{
-		response.status(400).json({"code":"400","status":"failed","description":"bad request"});
+		response.status(400).json(utils.returnFailedResponse('bad request', null));
 	}
 	else
 	{
-		response.json({
-			"code":0,
-			"status":"success",
-			"description":"token generated successfully!",
-			"data": {
-				"token": getToken(params)
-			}
-		});
+		response.json(utils.returnSuccessfulResponse('token generated successfully!', {"token": utils.getToken(params)}));
 	}
 });
 
-app.use(save);
 //post transaction endpoint
 app.post('/transaction', function(request, response)
 {
-	var data = request.body;
-	if(!validateRequest(data))
+	const data = request.body;
+	if(!utils.validateRequest(data))
 	{
-		response.status(400).json({"code":"400","status":"failed","description":"bad request"});
+		response.status(400).json(utils.returnFailedResponse('Bad Request', null));
 	}
 	else
 	{
 		data.ip = request.ip;
-		var token = request.get('Authorization');
+		let token = request.get('Authorization');
 
 		if(typeof token == 'undefined' || token.indexOf("EKOINX") == -1)
 		{
-			response.status(400).json({"code":"400","status":"failed","description":"bad requst"});
+			response.status(400).json(utils.returnFailedResponse('bad request', null));
 		}
 		else
 		{
-			data.token = token.replace("EKOINX ", "");
-			var cipher = getToken(data);
-
-			console.log("token: " + data.token);
-			console.log('cipher: ' + cipher);
-
-			if(data.token == cipher)
-			{
-				console.log(data);
-				next();
-		   	}
-		    else
-		    {
-		    	response.status(401).json({"code":"401","status":"failed","description":"unathorized"});
-		    }
+			processor.saveTransactionRequest(token, data, 
+				()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
+				()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
 		}
 	}
 });
 
-var validateRequest = function(data)
-{
-	if(typeof data.value == 'undefined'
-		|| typeof data.addy == 'undefined'
-		|| typeof data.userId == 'undefined'
-		|| typeof data.email == 'undefined')
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-}
-
-var getToken = function(data)
-{
-	console.log(data);
-	var token = crypter.encrypt(data.value+data.addy+data.userId+data.email, data.addy.substr(0,32));
-	return token;
-}
-
-var doTestCrypt = function()
-{
-	var textToEncrypt = 'My super secret information.';
-	var secret = "My32charPasswordAndInitVectorStr"; //must be 32 char length
-
-	var encryptedMessage = crypter.encrypt(textToEncrypt, secret);
-	var decryptedMessage = crypter.decrypt(encryptedMessage, secret);
-
-	console.log(encryptedMessage);
-	console.log(decryptedMessage);
-}
-
 Date.prototype.toMysqlFormat = function()
 {
-    return this.getUTCFullYear() + "-" + twoDigits(1 + this.getUTCMonth()) + "-" + twoDigits(this.getUTCDate()) + " " + twoDigits(this.getUTCHours()) + ":" + twoDigits(this.getUTCMinutes()) + ":" + twoDigits(this.getUTCSeconds());
+    return this.getUTCFullYear() 
+    + "-" + utils.twoDigits(1 + this.getUTCMonth()) 
+    + "-" + utils.twoDigits(this.getUTCDate()) + " " 
+    + utils.twoDigits(this.getUTCHours()) + ":" 
+    + utils.twoDigits(this.getUTCMinutes()) + ":" 
+    + utils.twoDigits(this.getUTCSeconds());
 };
 
-var twoDigits = function(d)
-{
-    if(0 <= d && d < 10) return "0" + d.toString();
-    if(-10 < d && d < 0) return "-0" + (-1*d).toString();
-    return d.toString();
-}
-
-var CronJob = require('cron').CronJob;
-var dispatcher = require('./modules/dispatcher.js');
-var cron = '* 0/5 * * * * *';
+const CronJob = require('cron').CronJob;
+const dispatcher = require('./modules/dispatcher.js');
+const cron = '0/1 * * * * * *';
 
 new CronJob(
 	cron,
 	function()
 	{
-		console.log('Job triggered! every five minutes!');
+		console.log('Job triggered! every five minutes!', new Date());
 		dispatcher.dispatch();
 	},
 	function()

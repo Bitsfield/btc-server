@@ -1,63 +1,59 @@
-var mysql = require('mysql')
-var db = require('../cfg/db.js')
+var mysql = require('mysql');
+var db = require('../configs/database.js').mysql;
 
-var pool = mysql.createPool(db.mysql);
+var pool = mysql.createPool(db.conn);
+const pending_status = "PENDING";
 
 module.exports = {
 	
-	fetch: function()
+	fetch: function(limit, callback)
 	{
 		try
 		{
-			pool.getConnection(function(err, connection)
+			return pool.getConnection(function(err, connection)
 			{
-				if(err) throw err;
-
-				console.log('Database connected successfully...');
-
-				var sql = "";
-
-				connection.query(sql, function (err, results)
-				{
-					if(err) throw err
-					console.log('Data retrieved : ', results);
-
-					//do something with results
-
-					connection.release();
-				});
+				if(err) handleConnErr(err);
+				log('Database connected successfully...', 'info');
+				var sql = "SELECT * FROM `"+db.table+"` WHERE status = '"+pending_status+"' ORDER BY req_datetime asc LIMIT "+limit;
+				log(sql, 'info');
+				connection.query(sql, callback);
+				connection.release();
 			});
 		}
 		catch(err)
 		{
-			console.log(err);
+			log(err, 'info');
 		}
 	},
 
-	update: function(data)
+	getCurrentAddy: function(callback)
 	{
 		try
 		{
-			pool.getConnection(function(err, connection)
+			return pool.getConnection(function(err, connection)
 			{
-				if(err) throw err;
-
+				if(err) handleConnErr(err);
 				console.log('Database connected successfully...');
-
-				var sql = "";
-
-				connection.query(sql, function (err, results)
-				{
-					if(err) throw err
-					console.log('Data updated! Response: ', result);
-					connection.release();
-				});
+				var sql = "SELECT * FROM `"+db.tbls.out_addys_tbl+"` WHERE spent = 0 ";
+				log(sql, 'info');
+				connection.query(sql, callback);
+				connection.release();
 			});
 		}
 		catch(err)
 		{
-			console.log(err);
+			log(err, 'info');
 		}
-	}
-	
+	},
+}
+
+function log(msg, level)
+{
+	console.log(msg);
+}
+
+function handleConnErr(err)
+{
+	log(err, 'error');
+	throw err;
 }
