@@ -7,25 +7,26 @@ const Op = require('sequelize').Op;
 module.exports = {
 
 	saveTrans : function(data, callback) { 
-		models.Trans.create(data).then(callback).catch((err)=>{console.log("farts! " + err)}); 
+		models.Trans.create(data).then(callback);
 	},
 
-	getCurrAddy : function(callback, error) { 
-		models.Addy.findOne({where: {'active': true, 'spent': false}}).then(callback).catch(error);
+	getCurrAddy : function(callback) { 
+		models.Addy.findOne({where: {'active': true, 'spent': false}}).then(callback);
 	},
 
-	getTransBatch : function(callback, error) {
-		models.Trans.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } ).then(callback).catch(error);
+	getTransBatch : function(callback) {
+		models.Trans.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } ).then(callback);
 	},
 
-	saveAddy : function(addy) {
-		models.Addy.create(addy).then(callback).catch((err) => { console.log("Farts! Something just happen right now! ", err) });
+	saveAddy : function(addy, callback) {
+		models.Addy.create(addy).then(callback(addy));
 	},
 
 	incrementWalletAddyCount : function(walletId) {
 		models.Wallet.findById(walletId).then(wallet => {
+			console.log("Retrieved wallet: " + wallet);
 			wallet.increment('addresses', {by: 1});
-		}),
+		});
 	},
 
 	updateAddy : function(data, where) {

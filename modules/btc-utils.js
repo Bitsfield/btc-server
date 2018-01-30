@@ -9,7 +9,7 @@ const token = "0e7f39dde5b7442985566fa85f9ebb1c";
 const base_url = "https://api.blockcypher.com/v1/bcy/test";
 
 
-processTransaction(newAddy, oldAddy, results, totalAmount, change, callback)
+function processTransaction(newAddy, oldAddy, results, totalAmount, change, callback)
 {
 	getUnspent(oldAddy.addy, function(unspent)
 	{
@@ -33,18 +33,23 @@ function buildTransaction(outs, changeAddy, changeAmnt, unspent)
 		let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
 		let txb = new bitcoin.TransactionBuilder(network);
 
+
+
 		txb.addInput(unspent.tx_hash, unspent.tx_output_n);
 
 		if(typeof hd != 'undefined' &typeof outs != 'undefined' && outs.constructor === Array)
 		{
-			for(let i = 0, let len = outs.length; i < len; i++)
+			for(let i = 0, len = outs.length; i < len; i++)
 			{
-				txb.addOutput(out[i].addy, out[i].value);
+				txb.addOutput(outs[i].addy, outs[i].value);
 			}
+
+			console.log("Transaction builder", txb);
+			console.log("Keypair", hd.keyPair);
 
 			txb.addOutput(changeAddy, changeAmnt);
 
-			txb.sign(hd.keypair);
+			txb.sign(0, hd.keyPair);
 
 			let tx = txb.build();
 			console.log("built transaction object: " + tx);
@@ -54,15 +59,15 @@ function buildTransaction(outs, changeAddy, changeAmnt, unspent)
 	}
 	catch(err)
 	{
-		return throw;
+		console.error(err);
 	}
 }
 
-function broadcast_tx(tx, callback)
+function broadcastTx(tx, callback)
 {
 	console.log("tx in hex = ", tx.toHex());
-	var push_url = base_url+"/txs/push?token="+token;
-	var options = {
+	let push_url = base_url+"/txs/push?token="+token;
+	let options = {
 		uri: push_url,
 		method: 'POST',
 		json: {
@@ -75,6 +80,7 @@ function broadcast_tx(tx, callback)
 		if(err)
 		{
 			console.error('Request failed:', err);
+			throw err;
 		}
 		else
 		{
@@ -87,12 +93,12 @@ function broadcast_tx(tx, callback)
 
 function getUnspent(address, callback)
 {
-	var url = base_url+"/addrs/"+saddress+"?unspentOnly=true&token="+token;
+	let url = base_url+"/addrs/"+address+"?unspentOnly=true&token="+token;
 	request(url, function (error, response, body)
 	{
 		if (!error && response.statusCode == 200)
 		{
-			var json = JSON.parse(body);
+			let json = JSON.parse(body);
 			if(typeof json != 'undefined' && typeof json["txrefs"] != 'undefined')
 			{
 				console.log("JSON unspent", json["txrefs"][0]);
@@ -100,46 +106,48 @@ function getUnspent(address, callback)
 				callback(json["txrefs"][0]);
 			}
 		}
+		else throw error;
 	});
-	return null;
 }
 
-function getTxFee(ins, outs, priority)
+function getTxFee(ins, outs, priority, callback)
 {
-	var price_per_byte = getPricePerByte(priority);
-	var bytes = getNoOfBytes(ins, outs);
-	return price_per_byte * bytes;
+	getPricePerByte(priority, function(pricePerByte)
+	{
+		let noOfBytes = getNoOfBytes(ins, outs);
+		callback(pricePerByte * noOfBytes);
+	});
 }
 
 function getNoOfBytes(ins, outs)
 {
 	//(in)(4e4 + 2e4) - (out)(1e4 + 3e4) = (fee)2e4
-	var bytes = (ins*180) + (outs*34) + 10 + ins;
+	let bytes = (ins*180) + (outs*34) + 10 + ins;
 	return bytes;
 }
 
-function getPricePerByte(priority)
+function getPricePerByte(priority, callback)
 {
 	//{"fastestFee":220,"halfHourFee":210,"hourFee":120}
-	var def_ppb = 50;
-	var url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
+	let def_ppb = 50;
+	let url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
 	try
 	{
 		request(url, function (error, response, body)
 		{
 			if (!error && response.statusCode == 200)
 			{
-				var res = JSON.parse(body);
+				let res = JSON.parse(body);
 				if(typeof res != 'undefined' && res != null)
 				{
-					var low = res.hourFee;
-					var mid = res.halfHourFee;
-					var high = res.fastestFee
+					let low = res.hourFee;
+					let mid = res.halfHourFee;
+					let high = res.fastestFee
 
-					return mid;
+					callback(mid);
 				}
 			}
-			else throw(error);
+			else throw error;
 		});
 	}
 	catch(err)
@@ -154,33 +162,40 @@ function satoshiToBTC(value)
 	return value * 0.00000001;
 }
 
-function getBalance(address)
+function getBalance(address, callback)
 {
-	var url = base_url+"/addrs/"+address+"/balance?token="+token;
+	let url = base_url+"/addrs/"+address+"/balance?token="+token;
 	request(url, function (error, response, body)
 	{
 		if (!error && response.statusCode == 200)
 		{
-			var json = JSON.parse(body);
+			let json = JSON.parse(body);
 			if(typeof json != 'undefined')
 			{
 				console.log("Final balance for address " + address + " = ", json.final_balance);
-				return json.final_balance;
+				callback(json.final_balance);
 			}
 		}
+		else throw error;
 	});
-	return 0;
 }
 
 function generateNewAddress(oldAddy)
 {
+	console.log("About to generate new address...");
+	console.log("Old address: " +oldAddy);
+	let indx = oldAddy.indx;
+	indx++;
+	console.log("New Address index: " + indx);
+
 	if(typeof oldAddy != 'undefined')
 	{
 		try
 		{
 			let seed = bip39.mnemonicToSeed(mnemonic);
+			console.log("Seed generated: " + seed);
 		    let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
-		    let newAddy = hd.deriveHardened(0).derive(0).derive(oldAddy.index + 1);
+		    let newAddy = hd.deriveHardened(0).derive(0).derive(indx).getAddress();
 		    return newAddy;
 		}
 		catch(err)
@@ -191,7 +206,25 @@ function generateNewAddress(oldAddy)
 	return null;
 }
 
+function generateRootAddress()
+{
+	try
+	{
+		let seed = bip39.mnemonicToSeed(mnemonic);
+	    let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
+	    let newAddy = hd.deriveHardened(0).derive(0).derive(0).getAddress();
+	    return newAddy;
+	}
+	catch(err)
+	{
+		console.log("Farts! Something just happen right now!", err);
+		return null;
+	}
+}
+
 module.exports = {
 	processTransaction : processTransaction,
 	generateNewAddress : generateNewAddress,
+	getTxFee : getTxFee,
+	generateRootAddress: generateRootAddress
 }

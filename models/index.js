@@ -27,10 +27,10 @@ models.forEach(function(model) {
 });
 
 // describe relationships
-(function(m) {
-  m.Addy.belongsTo(m.Wallet);
-  m.Wallet.hasMany(m.Addy);
-})(module.exports);
+// (function(m) {
+//   m.Addy.belongsTo(m.Wallet);
+//   // m.Wallet.hasMany(m.Addy);
+// })(module.exports);
 
 // export connection
 module.exports.sequelize = sequelize;

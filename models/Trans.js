@@ -4,7 +4,7 @@ module.exports = (sequelize, DataTypes) => {
 	{
 		id 			: 		{ type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 		addy 		: 		{ type: DataTypes.STRING, allowNull: false },
-		value 		: 		{ type: DataTypes.DOUBLE(11, 8), allowNull: false },
+		value 		: 		{ type: DataTypes.DOUBLE, allowNull: false },
 		userId 		: 		{ type: DataTypes.STRING, allowNull: false },
 		email 		: 		{ type: DataTypes.STRING, allowNull: false },
 		status 		: 		{ type: DataTypes.STRING, allowNull: false},

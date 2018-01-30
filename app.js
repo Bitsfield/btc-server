@@ -6,6 +6,7 @@ const compression = require('compression');
 
 const utils = require('./modules/utils.js');
 const processor = require('./modules/processor.js');
+const dispatcher = require('./modules/dispatcher.js');
 
 const app = express();
 
@@ -21,8 +22,10 @@ app.get('/', function(req, res) { res.send("Hello Friend!"); } );
 app.get('/test', function(req, res) 
 {
 	console.log("testing!!!!!!!1");
-	processor.test()
-	res.send("testing.....!!!!!!!");
+	dispatcher.dispatch(function(addy){
+		res.json({code: 0, status:'completed!'});
+	});
+	// res.send("testing.....!!!!!!!");
 });
 
 //get app status
@@ -96,7 +99,7 @@ Date.prototype.toMysqlFormat = function()
 // 	function()
 // 	{
 // 		console.log('Job triggered! every five minutes!', new Date());
-// 		dispatcher.dispatch();
+// 		dispatcher.dispatch({console.log("Dispatch Completed Successfully!!!!!!!!!!")});
 // 	},
 // 	function()
 // 	{
