@@ -6,16 +6,16 @@ const Op = require('sequelize').Op;
 
 module.exports = {
 
-	saveTrans : function(data, callback) { 
-		models.Trans.create(data).then(callback);
+	saveRequest : function(data, callback) { 
+		models.Req.create(data).then(callback);
 	},
 
 	getCurrAddy : function(callback) { 
 		models.Addy.findOne({where: {'active': true, 'spent': false}}).then(callback);
 	},
 
-	getTransBatch : function(callback) {
-		models.Trans.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } ).then(callback);
+	getRequestBatch : function(callback) {
+		models.Req.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } ).then(callback);
 	},
 
 	saveAddy : function(addy, callback) {
@@ -43,9 +43,18 @@ module.exports = {
 		});
 	},
 
-	updateTrans : function(data, where) {
-		models.Trans.update(data, {where: where});
+	updateRequest : function(data, where) {
+		models.Req.update(data, {where: where});
 	},
+
+	getActiveAddys : function(callback, error)
+	{
+		models.Addy.findAll({where: {'active': true}}).then(callback).catch(error);
+	},
+
+	saveTransaction : function(trans, cb, err) {
+		models.Tran.create(trans).then(cb).catch(err);
+	}
 }
 
 ////update new current address (balance = change, active = true, spent = false, previous_addy)

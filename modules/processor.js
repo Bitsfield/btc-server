@@ -1,12 +1,9 @@
 
 const database = require('./database.js');
-const bitcoin = require('bitcoinjs-lib');
-const network = bitcoin.networks.bcy.test;
-const BigInteger = require('bigi');
 
 const utils = require('./utils.js');
 
-const saveTransactionRequest = function(token, data, success, failure)
+const saveRequest = function(token, data, success, failure)
 {
 	token = token.replace("EKOINX ", "");
 	data.ref = new Buffer(token.substr(0, 10) + new Date().getTime()).toString("base64");
@@ -21,7 +18,7 @@ const saveTransactionRequest = function(token, data, success, failure)
 	if(token == cipher)
 	{
 		console.log(data);
-		database.saveTrans(data, success);
+		database.saveRequest(data, success);
    	}
     else
     {
@@ -29,16 +26,12 @@ const saveTransactionRequest = function(token, data, success, failure)
     }
 }
 
-const getCurrentAddress = function(callback)
+function getActiveAddys(callback, error)
 {
-	
-
+	return database.getActiveAddys(callback, error);
 }
- 
-const newWallet = function(){};
 
 module.exports = {
-
-	saveTransactionRequest : saveTransactionRequest,
-	test : newWallet
+	saveRequest : saveRequest,
+	getActiveAddys: getActiveAddys
 }

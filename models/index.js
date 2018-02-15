@@ -18,11 +18,12 @@ const sequelize = new Sequelize(db.dbase, db.user, db.pass,
 // load models
 var models = [
   'Addy',
-  'Trans',
+  'Req',
+  'Tran',
   'Wallet'
 ];
 
-models.forEach(function(model) {
+models.forEach( function(model) {
   module.exports[model] = sequelize.import(__dirname + '/' + model);
 });
 
@@ -35,4 +36,4 @@ models.forEach(function(model) {
 // export connection
 module.exports.sequelize = sequelize;
 
-// sequelize.sync();
+sequelize.sync();

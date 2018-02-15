@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
 
-	return sequelize.define('trans', 
+	return sequelize.define('requests', 
 	{
 		id 			: 		{ type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 		addy 		: 		{ type: DataTypes.STRING, allowNull: false },
@@ -10,10 +10,12 @@ module.exports = (sequelize, DataTypes) => {
 		status 		: 		{ type: DataTypes.STRING, allowNull: false},
 		ip 			: 		{ type: DataTypes.STRING, allowNull: false },
 		ref 		: 		{ type: DataTypes.STRING, allowNull: false },
+		hash 		: 		{ type: DataTypes.TEXT, allowNull: true },
 		remarks 	: 		{ type: DataTypes.TEXT, allowNull: true },
-	}, {
+	},
+	{
 		paranoid: true,
-		indexes: [ { fields: ['addy', 'value', 'status', 'ref', 'email'] } ] 
+		indexes: [ { name: 'requests_tbl_index', fields: ['addy', 'value', 'status', 'ref', 'email'] } ] 
 	});
 	
 }

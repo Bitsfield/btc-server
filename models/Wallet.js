@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
 		remarks 	: { type: DataTypes.TEXT, allowNull: true },
 	}, {
 		paranoid: true,
-		indexes: [ { fields: ['name', {attribute:'wif', length:32}, {attribute:'xpub',length:32}, 'hd'] } ]
+		indexes: [ { name: 'wallets_tbl_indx', fields: ['name', {attribute:'wif', length:32}, {attribute:'xpub',length:32}, 'hd'] } ]
 	});
 
 }

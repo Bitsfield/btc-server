@@ -22,8 +22,8 @@ app.get('/', function(req, res) { res.send("Hello Friend!"); } );
 app.get('/test', function(req, res) 
 {
 	console.log("testing!!!!!!!1");
-	dispatcher.dispatch(function(addy){
-		res.json({code: 0, status:'completed!'});
+	dispatcher.test(function(response){
+		res.json({code: 0, status:'completed!', data: response});
 	});
 	// res.send("testing.....!!!!!!!");
 });
@@ -54,6 +54,13 @@ app.get('/token/:value/:addy/:userId/:email', function(request, response)
 	}
 });
 
+//get active address
+app.get('/addy/active', function(req, res)
+{
+	processor.getActiveAddys(active => { res.json({'addys': active}) }, () => {res.json({'status' : 'error!'}) });
+
+});
+
 //post transaction endpoint
 app.post('/transaction', function(request, response)
 {
@@ -73,7 +80,7 @@ app.post('/transaction', function(request, response)
 		}
 		else
 		{
-			processor.saveTransactionRequest(token, data, 
+			processor.saveRequest(token, data, 
 				()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
 				()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
 		}

@@ -15,7 +15,8 @@ function processTransaction(newAddy, oldAddy, results, totalAmount, change, call
 	{
 		try
 		{
-			let tx = buildTransaction(results, newAddy, change, unspent);
+			let key = deriveNode(oldAddy.indx).keyPair;
+			let tx = buildTransaction(results, newAddy, change, unspent, key);
 			broadcastTx(tx, callback);
 		}
 		catch(err)
@@ -25,19 +26,18 @@ function processTransaction(newAddy, oldAddy, results, totalAmount, change, call
 	});
 }
 
-function buildTransaction(outs, changeAddy, changeAmnt, unspent)
+function buildTransaction(outs, changeAddy, changeAmnt, unspent, key)
 {
 	try
 	{
-		let seed = bip39.mnemonicToSeed(mnemonic);
-		let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
 		let txb = new bitcoin.TransactionBuilder(network);
 
+		for (var i = unspent.length - 1; i >= 0; i--)
+		{
+			txb.addInput(unspent[i].tx_hash, unspent[i].tx_output_n);
+		}
 
-
-		txb.addInput(unspent.tx_hash, unspent.tx_output_n);
-
-		if(typeof hd != 'undefined' &typeof outs != 'undefined' && outs.constructor === Array)
+		if(typeof outs != 'undefined' && outs.constructor === Array)
 		{
 			for(let i = 0, len = outs.length; i < len; i++)
 			{
@@ -45,11 +45,14 @@ function buildTransaction(outs, changeAddy, changeAmnt, unspent)
 			}
 
 			console.log("Transaction builder", txb);
-			console.log("Keypair", hd.keyPair);
+			console.log("Keypair", key);
 
-			txb.addOutput(changeAddy, changeAmnt);
+			if(changeAmnt > 0)
+			{
+				txb.addOutput(changeAddy, changeAmnt);
+			}
 
-			txb.sign(0, hd.keyPair);
+			txb.sign(0, key);
 
 			let tx = txb.build();
 			console.log("built transaction object: " + tx);
@@ -85,8 +88,8 @@ function broadcastTx(tx, callback)
 		else
 		{
 			console.log('Broadcast results:', body);
-			console.log("Transaction send with hash:", tx.getId());
-			callback();
+			console.log("Transaction sent with hash:", tx.getId());
+			callback(tx, body);
 		}
 	});
 }
@@ -94,19 +97,28 @@ function broadcastTx(tx, callback)
 function getUnspent(address, callback)
 {
 	let url = base_url+"/addrs/"+address+"?unspentOnly=true&token="+token;
+	console.log("About to query url "+url+" for unspent outputs of address "+address);
 	request(url, function (error, response, body)
 	{
-		if (!error && response.statusCode == 200)
+		if(error)
+		{
+			console.error(error);
+			throw error;
+		}
+		else if(response.statusCode == 200)
 		{
 			let json = JSON.parse(body);
 			if(typeof json != 'undefined' && typeof json["txrefs"] != 'undefined')
 			{
-				console.log("JSON unspent", json["txrefs"][0]);
+				console.log("JSON unspent", json["txrefs"]);
 				console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
-				callback(json["txrefs"][0]);
+				callback(json["txrefs"]);
 			}
+			else
+				throw "No unspent Transaction outputs Found!";
 		}
-		else throw error;
+		else
+			throw "Could not retrieve unspent outputs!";
 	});
 }
 
@@ -123,6 +135,8 @@ function getNoOfBytes(ins, outs)
 {
 	//(in)(4e4 + 2e4) - (out)(1e4 + 3e4) = (fee)2e4
 	let bytes = (ins*180) + (outs*34) + 10 + ins;
+	console.log("Calculated message size: " + bytes + " bytes.")
+	// 180 + 204 +10 + 1 = (361)
 	return bytes;
 }
 
@@ -144,7 +158,7 @@ function getPricePerByte(priority, callback)
 					let mid = res.halfHourFee;
 					let high = res.fastestFee
 
-					callback(mid);
+					callback(low);
 				}
 			}
 			else throw error;
@@ -192,10 +206,7 @@ function generateNewAddress(oldAddy)
 	{
 		try
 		{
-			let seed = bip39.mnemonicToSeed(mnemonic);
-			console.log("Seed generated: " + seed);
-		    let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
-		    let newAddy = hd.deriveHardened(0).derive(0).derive(indx).getAddress();
+		    let newAddy = deriveNode(indx).getAddress();
 		    return newAddy;
 		}
 		catch(err)
@@ -210,9 +221,7 @@ function generateRootAddress()
 {
 	try
 	{
-		let seed = bip39.mnemonicToSeed(mnemonic);
-	    let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
-	    let newAddy = hd.deriveHardened(0).derive(0).derive(0).getAddress();
+	    let newAddy = deriveNode(0).getAddress();
 	    return newAddy;
 	}
 	catch(err)
@@ -220,6 +229,17 @@ function generateRootAddress()
 		console.log("Farts! Something just happen right now!", err);
 		return null;
 	}
+}
+
+function deriveNode(index)
+{
+	console.log("About to derive new node at index: " + index );
+	let seed = bip39.mnemonicToSeed(mnemonic);
+	console.log("Created seed: ", seed);
+	let hd = new bitcoin.HDNode.fromSeedBuffer(seed, network);
+	let node = hd.deriveHardened(0).derive(0).derive(index);
+	console.log("Created node. ", node);
+	return node;
 }
 
 module.exports = {

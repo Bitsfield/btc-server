@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
 
-	return sequelize.define('addys', 
+	return sequelize.define('addresses', 
 	{
 		id 			: 		{ type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 		walletId 	: 		{ type: DataTypes.INTEGER, allowNull: false, field: 'wallet_id' },
@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
 		remarks 	: 		{ type: DataTypes.TEXT, allowNull: true },
 	}, {
 			paranoid: true, 
-			indexes: [ { fields: [ 'addy', 'wallet_id', 'active', 'spent', 'prev_addy', 'next_addy', 'purpose' ] } ]
+			indexes: [ { name: 'address_tbl_index', fields: [ 'addy', 'wallet_id', 'active', 'spent', 'prev_addy', 'next_addy', 'purpose' ] } ]
 	});
 
 };
