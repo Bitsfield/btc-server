@@ -44,6 +44,7 @@ app.get('/status', function(req, res)
 app.get('/token/:value/:addy/:userId/:email', function(request, response)
 {
 	const params = request.params;
+	console.log("Request Params : " + params);
 	if(!utils.validateRequest(params))
 	{
 		response.status(400).json(utils.returnFailedResponse('bad request', null));
@@ -71,18 +72,28 @@ app.post('/transaction', function(request, response)
 	}
 	else
 	{
-		data.ip = request.ip;
-		let token = request.get('Authorization');
-
-		if(typeof token == 'undefined' || token.indexOf("EKOINX") == -1)
-		{
-			response.status(400).json(utils.returnFailedResponse('bad request', null));
-		}
+		if(typeof request.ip != 'undefined') data.ip = request.ip;
 		else
 		{
-			processor.saveRequest(token, data, 
-				()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
-				()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
+			data.ip = request.headers['x-forwarded-for'] || request.connection.remoteAddress;
+		}
+		if(data.ip == null || typeof data.ip == 'undefined')
+			response.status(500).json(utils.returnFailedResponse('Could not retrieve client address!', null));
+
+		else
+		{
+			let token = request.get('Authorization');
+
+			if(typeof token == 'undefined' || token.indexOf("EKOINX") == -1)
+			{
+				response.status(400).json(utils.returnFailedResponse('bad request', null));
+			}
+			else
+			{
+				processor.saveRequest(token, data, 
+					()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
+					()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
+			}
 		}
 	}
 });
