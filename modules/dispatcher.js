@@ -3,9 +3,8 @@ const db = require('./database.js');
 const btc = require('./btc-utils.js');
 const dateFormat = require('dateformat');
 
-function test(callback)
-{
-	dispatch(callback);
+async function test() {
+	await dispatch();
 	// let newAddy = btc.generateRootAddress();
 	// let index = 0;
 	// let path = "m/0'/0/"+index;
@@ -20,112 +19,95 @@ function test(callback)
 	// 	prevAddy 	: 	null,
 	// 	indx 		: 	index
 	// };
-	// db.saveAddy(addy, callback);
+	// db.saveAddy(addy);
 }
 
-function dispatch(callback)
+async function dispatch()
 {
 	console.log('Dispatcher has been dispatched!!!!!');
-	getPendingTransactions( function(results)
-	{
-		// console.log(results);
+	const results = await getPendingTransactions();
 		console.log("Retrieved pending transactions...");
-		if(typeof results != 'undefined' && results.length > 0)
+		if(results && results.length > 0)
 		{
-			getCurrentAddress( function(currAddy)
-			{
-				console.log("Retrieved current address", currAddy);
-				console.log("Available balance: " + currAddy.balance);
+			const currAddy = await getCurrentAddress();
+			console.log("Retrieved current address", currAddy);
+			console.log("Available balance: " + currAddy.balance);
 
-				let totalAmount = getTotalRetrievedTransAmount(results);
-				console.log("Retrieved total transaction amount " + totalAmount);
-				if(currAddy.balance > totalAmount)
-				{
-					console.log("About to process transaction...");
-					processTransaction(currAddy, results, totalAmount, callback);
-				}
-				else
-				{
-					//perform some voodoo here to
-					//build transaction up till available balance;
-					//remember miners fee o!
-					console.log("Transaction amount is more than the available wallet balance.");
-					console.log("Transaction processing aborted!");
-					callback("sorry we don't have enough funds to handle this transaction! *sad face*")
-				}
-			} );
+			let totalAmount = getTotalRetrievedTransAmount(results);
+			console.log("Retrieved total transaction amount " + totalAmount);
+			if(currAddy.balance > totalAmount)
+			{
+				console.log("About to process transaction...");
+				const response = await processTransaction(currAddy, results, totalAmount);
+				return response;
+			}
+			else
+			{
+				//perform some voodoo here to
+				//build transaction up till available balance;
+				//remember miners fee o!
+				console.log("Transaction amount is more than the available wallet balance.");
+				console.log("Transaction processing aborted!");
+				return "sorry we don't have enough funds to handle this transaction! *sad face*";
+			}
 		}
 		else
 		{
 			console.log("No pending transactions to process. -_- ");
-			callback("no pending transactions!!!!!!!!!!!");
+			return "no pending transactions!!!!!!!!!!!";
 		}
-	} );
 }
 
-function processTransaction (currAddy, results, totalAmount, callback)
+async function processTransaction (currAddy, results, totalAmount)
 {
 	let newAddy = btc.generateNewAddress(currAddy);
 	console.log("Generated new address: " + newAddy);
-	saveNewAddy(newAddy, currAddy, function(addy)
-	{
+	const addy = await saveNewAddy(newAddy, currAddy);
 		console.log("Saved new address to database....");
-		let len = results.length + 1;
+		const len = results.length + 1;
 		console.log("Transactions output lenght = " + len);
 
-		btc.getTxFee(1, len, 'low', function(transFee)
-		{
-			console.log("Calculated transaction fee..: " + transFee);
+		const transFee = await btc.getTxFee(1, len, 'low');
+		console.log("Calculated transaction fee..: " + transFee);
 
-			let change = 0;
-			if(currAddy.balance > (totalAmount + transFee))
-			{
-				change = currAddy.balance - totalAmount - transFee;
-			}
-			
-			console.log("Calculated change amount...: " + change);
+		let change = 0;
+		if(currAddy.balance > (totalAmount + transFee)) {
+			change = currAddy.balance - totalAmount - transFee;
+		}
+		console.log("Calculated change amount...: " + change);
 
-			btc.processTransaction(newAddy, currAddy, results, totalAmount, change, function(tx, response)
-			{
-				console.log("Finished processing bitcoin transaction...");
-				//do something when transaction is processed
+		const {tx, response} = await btc.processTransaction(newAddy, currAddy, results, totalAmount, change);
+		console.log("Finished processing bitcoin transaction...");
 
-				//saveTransactionObject in db;
-				let addys = getAddys(results) + "," + newAddy;
-				saveNewTransaction(tx, response, addys, totalAmount);
+		const addys = getAddys(results) + "," + newAddy;
+		await saveNewTransaction(tx, response, addys, totalAmount);
 
-				db.updateAddy({
-					balance: 0, 
-					active: false, 
-					spent: true, 
-					nextAddy: newAddy, 
-					spentOn: dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')
-				}, {id: currAddy.id});
+		await db.updateAddy({
+			balance: 0, 
+			active: false, 
+			spent: true, 
+			nextAddy: newAddy, 
+			spentOn: dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')
+		}, {id: currAddy.id});
 
-				db.setCurrAddy(newAddy, change, currAddy.addy);
+		await db.setCurrAddy(newAddy, change, currAddy.addy);
 
-				for (var i = results.length - 1; i >= 0; i--)
-				{
-					db.updateRequest({
-						status: 'PUSHED', 
-						hash: response.tx.hash
-					}, { id: results[i].id });
-				}
+		for (var i = results.length - 1; i >= 0; i--) {
+			await db.updateRequest({
+				status: 'PUSHED', 
+				hash: response.tx.hash
+			}, { id: results[i].id });
+		}
 
-				callback(response);
-			});
-		});
-	});
+		return response;
 }
 
-function getPendingTransactions(callback)
-{
-	db.getRequestBatch(callback);
+async function getPendingTransactions() {
+        return await db.getRequestBatch();
 }
 
-function getCurrentAddress(callback)
-{
-	db.getCurrAddy(callback);
+async function getCurrentAddress() {
+	return db.getCurrAddy();
 }
 
 function getTotalRetrievedTransAmount(results)
@@ -139,11 +121,11 @@ function getTotalRetrievedTransAmount(results)
 	return val;
 }
 
-function saveNewAddy(newAddy, oldAddy, callback)
+async function saveNewAddy(newAddy, oldAddy)
 {
 	let index = oldAddy.indx + 1;
 	let path = "m/0'/0/"+index;
-	addy = {
+	const addy = {
 		walletId 	: 	oldAddy.walletId,
 		addy 		: 	newAddy,
 		path 		: 	path,
@@ -154,9 +136,8 @@ function saveNewAddy(newAddy, oldAddy, callback)
 		prevAddy 	: 	oldAddy.addy,
 		indx 		: 	index
 	};
-	// callback();
 	// db.incrementWalletAddyCount(oldAddy.walletId);
-	db.saveAddy(addy, callback);
+	return await db.saveAddy(addy);
 }
 
 function getAddys(result)
@@ -168,9 +149,9 @@ function getAddys(result)
 	return addy.toString();
 }
 
-function saveNewTransaction(tx, resp, addys, value)
+async function saveNewTransaction(tx, resp, addys, value)
 {
-	let trans = {
+	const trans = {
 		addys : 	addys,
 		value : 	value,
 		hash  : 	tx.getId(),
@@ -178,14 +159,13 @@ function saveNewTransaction(tx, resp, addys, value)
 		status 	: 	'PUSHED'
 	};
 
-	db.saveTransaction(trans, function()
-	{
+	try {
+		await db.saveTransaction(trans);
 		console.log("Transaction has been saved successfully. Transaction hash is: " + tx.getId());
-	},
-	function(error)
-	{
-	 console.error("Error while saving transaction to database!", error);
-	});
+	} catch (error) {
+		console.error("Error while saving transaction to database!", error);
+		throw error;
+	}
 
 }
 
