@@ -19,13 +19,19 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get('/', function(req, res) { res.send("Hello Friend!"); } );
 
 //default homepage
-app.get('/test', function(req, res) 
+app.get('/test', async function(req, res) 
 {
-	console.log("testing!!!!!!!1");
-	dispatcher.test(function(response){
+	try
+	{
+		console.log("testing!!!!!!!1");
+		const response = await dispatcher.test();
 		res.json({code: 0, status:'completed!', data: response});
-	});
-	// res.send("testing.....!!!!!!!");
+	}
+	catch(error)
+	{
+		console.error('Error in /test endpoint:', error);
+		res.status(500).json(utils.returnFailedResponse('Internal server error', null));
+	}
 });
 
 //get app status
@@ -56,45 +62,68 @@ app.get('/token/:value/:addy/:userId/:email', function(request, response)
 });
 
 //get active address
-app.get('/addy/active', function(req, res)
+app.get('/addy/active', async function(req, res)
 {
-	processor.getActiveAddys(active => { res.json({'addys': active}) }, () => {res.json({'status' : 'error!'}) });
-
+	try
+	{
+		const active = await processor.getActiveAddys();
+		res.json({'addys': active});
+	}
+	catch(error)
+	{
+		console.error('Error getting active addresses:', error);
+		res.status(500).json({'status' : 'error!', 'message': error.message});
+	}
 });
 
 //post transaction endpoint
-app.post('/transaction', function(request, response)
+app.post('/transaction', async function(request, response)
 {
-	const data = request.body;
-	if(!utils.validateRequest(data))
+	try
 	{
-		response.status(400).json(utils.returnFailedResponse('Bad Request', null));
-	}
-	else
-	{
-		if(typeof request.ip != 'undefined') data.ip = request.ip;
-		else
+		const data = request.body;
+		if(!utils.validateRequest(data))
 		{
-			data.ip = request.headers['x-forwarded-for'] || request.connection.remoteAddress;
+			response.status(400).json(utils.returnFailedResponse('Bad Request', null));
 		}
-		if(data.ip == null || typeof data.ip == 'undefined')
-			response.status(500).json(utils.returnFailedResponse('Could not retrieve client address!', null));
-
 		else
 		{
-			let token = request.get('Authorization');
-
-			if(typeof token == 'undefined' || token.indexOf("EKOINX") == -1)
-			{
-				response.status(400).json(utils.returnFailedResponse('bad request', null));
-			}
+			if(typeof request.ip != 'undefined') data.ip = request.ip;
 			else
 			{
-				processor.saveRequest(token, data, 
-					()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
-					()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
+				data.ip = request.headers['x-forwarded-for'] || request.connection.remoteAddress;
+			}
+			if(data.ip == null || typeof data.ip == 'undefined')
+				response.status(500).json(utils.returnFailedResponse('Could not retrieve client address!', null));
+
+			else
+			{
+				let token = request.get('Authorization');
+
+				if(typeof token == 'undefined' || token.indexOf("EKOINX") == -1)
+				{
+					response.status(400).json(utils.returnFailedResponse('bad request', null));
+				}
+				else
+				{
+					try
+					{
+						await processor.saveRequest(token, data);
+						response.json(utils.returnSuccessfulResponse('Transaction received!', null));
+					}
+					catch(err)
+					{
+						console.error('Error saving request:', err);
+						response.status(401).json(utils.returnFailedResponse('Unauthorized', null));
+					}
+				}
 			}
 		}
+	}
+	catch(error)
+	{
+		console.error('Error in /transaction endpoint:', error);
+		response.status(500).json(utils.returnFailedResponse('Internal server error', null));
 	}
 });
 
