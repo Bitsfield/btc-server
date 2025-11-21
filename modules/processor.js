@@ -3,10 +3,9 @@ const database = require('./database.js');
 
 const utils = require('./utils.js');
 
-const saveRequest = function(token, data, success, failure)
-{
+async function saveRequest(token, data) {
 	token = token.replace("EKOINX ", "");
-	data.ref = new Buffer(token.substr(0, 10) + new Date().getTime()).toString("base64");
+	data.ref = Buffer.from(token.substr(0, 10) + new Date().getTime()).toString("base64");
 	data.status = utils.PENDING;
 	data.remarks = "TRANSACTION RECEIVED " + new Date();
 
@@ -15,23 +14,19 @@ const saveRequest = function(token, data, success, failure)
 	console.log("token: " + token);
 	console.log('cipher: ' + cipher);
 
-	if(token == cipher)
-	{
+	if (token == cipher) {
 		console.log(data);
-		database.saveRequest(data, success);
-   	}
-    else
-    {
-    	failure();
-    }
+		return await database.saveRequest(data);
+	} else {
+		throw new Error('Token mismatch');
+	}
 }
 
-function getActiveAddys(callback, error)
-{
-	return database.getActiveAddys(callback, error);
+async function getActiveAddys() {
+    return await database.getActiveAddys();
 }
 
 module.exports = {
-	saveRequest : saveRequest,
-	getActiveAddys: getActiveAddys
+	saveRequest,
+	getActiveAddys
 }

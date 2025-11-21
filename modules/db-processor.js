@@ -5,44 +5,57 @@ var pool = mysql.createPool(db.conn);
 const pending_status = "PENDING";
 
 module.exports = {
-	
-	fetch: function(limit, callback)
-	{
-		try
-		{
-			return pool.getConnection(function(err, connection)
-			{
-				if(err) handleConnErr(err);
-				log('Database connected successfully...', 'info');
-				var sql = "SELECT * FROM `"+db.table+"` WHERE status = '"+pending_status+"' ORDER BY req_datetime asc LIMIT "+limit;
-				log(sql, 'info');
-				connection.query(sql, callback);
-				connection.release();
+	fetch: async function(limit) {
+		let connection;
+		try {
+			connection = await new Promise((resolve, reject) => {
+				pool.getConnection((err, conn) => {
+					if (err) reject(err);
+					else resolve(conn);
+				});
 			});
-		}
-		catch(err)
-		{
-			log(err, 'info');
+			log('Database connected successfully...', 'info');
+			var sql = "SELECT * FROM `" + db.table + "` WHERE status = '" + pending_status + "' ORDER BY req_datetime asc LIMIT " + limit;
+			log(sql, 'info');
+			const results = await new Promise((resolve, reject) => {
+				connection.query(sql, (err, res) => {
+					if (err) reject(err);
+					else resolve(res);
+				});
+			});
+			return results;
+		} catch (err) {
+			log(err, 'error');
+			throw err;
+		} finally {
+			if (connection) connection.release();
 		}
 	},
 
-	getCurrentAddy: function(callback)
-	{
-		try
-		{
-			return pool.getConnection(function(err, connection)
-			{
-				if(err) handleConnErr(err);
-				console.log('Database connected successfully...');
-				var sql = "SELECT * FROM `"+db.tbls.out_addys_tbl+"` WHERE spent = 0 ";
-				log(sql, 'info');
-				connection.query(sql, callback);
-				connection.release();
+	getCurrentAddy: async function() {
+		let connection;
+		try {
+			connection = await new Promise((resolve, reject) => {
+				pool.getConnection((err, conn) => {
+					if (err) reject(err);
+					else resolve(conn);
+				});
 			});
-		}
-		catch(err)
-		{
-			log(err, 'info');
+			console.log('Database connected successfully...');
+			var sql = "SELECT * FROM `" + db.tbls.out_addys_tbl + "` WHERE spent = 0 ";
+			log(sql, 'info');
+			const results = await new Promise((resolve, reject) => {
+				connection.query(sql, (err, res) => {
+					if (err) reject(err);
+					else resolve(res);
+				});
+			});
+			return results;
+		} catch (err) {
+			log(err, 'error');
+			throw err;
+		} finally {
+			if (connection) connection.release();
 		}
 	},
 }

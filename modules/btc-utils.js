@@ -1,6 +1,6 @@
 const bitcoin = require('bitcoinjs-lib');
 const bip39 = require('bip39');
-const request = require('request');
+const axios = require('axios');
 
 const network = bitcoin.networks.bcy.test;
 
@@ -9,21 +9,17 @@ const token = "0e7f39dde5b7442985566fa85f9ebb1c";
 const base_url = "https://api.blockcypher.com/v1/bcy/test";
 
 
-function processTransaction(newAddy, oldAddy, results, totalAmount, change, callback)
-{
-	getUnspent(oldAddy.addy, function(unspent)
-	{
-		try
-		{
-			let key = deriveNode(oldAddy.indx).keyPair;
-			let tx = buildTransaction(results, newAddy, change, unspent, key);
-			broadcastTx(tx, callback);
-		}
-		catch(err)
-		{
-			console.log("Farts! Something just happen right now...! ", err);
-		}
-	});
+async function processTransaction(newAddy, oldAddy, results, totalAmount, change) {
+    try {
+        const unspent = await getUnspent(oldAddy.addy);
+        let key = deriveNode(oldAddy.indx).keyPair;
+        let tx = buildTransaction(results, newAddy, change, unspent, key);
+        const broadcastResult = await broadcastTx(tx);
+        return broadcastResult;
+    } catch (err) {
+        console.log("Farts! Something just happen right now...! ", err);
+        throw err;
+    }
 }
 
 function buildTransaction(outs, changeAddy, changeAmnt, unspent, key)
@@ -66,69 +62,43 @@ function buildTransaction(outs, changeAddy, changeAmnt, unspent, key)
 	}
 }
 
-function broadcastTx(tx, callback)
-{
-	console.log("tx in hex = ", tx.toHex());
-	let push_url = base_url+"/txs/push?token="+token;
-	let options = {
-		uri: push_url,
-		method: 'POST',
-		json: {
-			"tx": tx.toHex()
-		}
-	};
-
-	request(options, function(err, httpResponse, body)
-	{
-		if(err)
-		{
-			console.error('Request failed:', err);
-			throw err;
-		}
-		else
-		{
-			console.log('Broadcast results:', body);
-			console.log("Transaction sent with hash:", tx.getId());
-			callback(tx, body);
-		}
-	});
+async function broadcastTx(tx) {
+    console.log("tx in hex = ", tx.toHex());
+    let push_url = base_url + "/txs/push?token=" + token;
+    try {
+        const response = await axios.post(push_url, { tx: tx.toHex() });
+        console.log('Broadcast results:', response.data);
+        console.log("Transaction sent with hash:", tx.getId());
+        return { tx, body: response.data };
+    } catch (err) {
+        console.error('Request failed:', err);
+        throw err;
+    }
 }
 
-function getUnspent(address, callback)
-{
-	let url = base_url+"/addrs/"+address+"?unspentOnly=true&token="+token;
-	console.log("About to query url "+url+" for unspent outputs of address "+address);
-	request(url, function (error, response, body)
-	{
-		if(error)
-		{
-			console.error(error);
-			throw error;
-		}
-		else if(response.statusCode == 200)
-		{
-			let json = JSON.parse(body);
-			if(typeof json != 'undefined' && typeof json["txrefs"] != 'undefined')
-			{
-				console.log("JSON unspent", json["txrefs"]);
-				console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
-				callback(json["txrefs"]);
-			}
-			else
-				throw "No unspent Transaction outputs Found!";
-		}
-		else
-			throw "Could not retrieve unspent outputs!";
-	});
+async function getUnspent(address) {
+    let url = base_url + "/addrs/" + address + "?unspentOnly=true&token=" + token;
+    console.log("About to query url " + url + " for unspent outputs of address " + address);
+    try {
+        const response = await axios.get(url);
+        const json = response.data;
+        if (typeof json !== 'undefined' && typeof json["txrefs"] !== 'undefined') {
+            console.log("JSON unspent", json["txrefs"]);
+            console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
+            return json["txrefs"];
+        } else {
+            throw new Error("No unspent Transaction outputs Found!");
+        }
+    } catch (err) {
+        console.error(err);
+        throw new Error("Could not retrieve unspent outputs!");
+    }
 }
 
-function getTxFee(ins, outs, priority, callback)
-{
-	getPricePerByte(priority, function(pricePerByte)
-	{
-		let noOfBytes = getNoOfBytes(ins, outs);
-		callback(pricePerByte * noOfBytes);
-	});
+async function getTxFee(ins, outs, priority) {
+    const pricePerByte = await getPricePerByte(priority);
+    let noOfBytes = getNoOfBytes(ins, outs);
+    return pricePerByte * noOfBytes;
 }
 
 function getNoOfBytes(ins, outs)
@@ -140,35 +110,25 @@ function getNoOfBytes(ins, outs)
 	return bytes;
 }
 
-function getPricePerByte(priority, callback)
-{
-	//{"fastestFee":220,"halfHourFee":210,"hourFee":120}
-	let def_ppb = 50;
-	let url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
-	try
-	{
-		request(url, function (error, response, body)
-		{
-			if (!error && response.statusCode == 200)
-			{
-				let res = JSON.parse(body);
-				if(typeof res != 'undefined' && res != null)
-				{
-					let low = res.hourFee;
-					let mid = res.halfHourFee;
-					let high = res.fastestFee
-
-					callback(low);
-				}
-			}
-			else throw error;
-		});
-	}
-	catch(err)
-	{
-		consol.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
-		return def_ppb;
-	}
+async function getPricePerByte(priority) {
+    //{"fastestFee":220,"halfHourFee":210,"hourFee":120}
+    let def_ppb = 50;
+    let url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
+    try {
+        const response = await axios.get(url);
+        const res = response.data;
+        if (typeof res !== 'undefined' && res != null) {
+            let low = res.hourFee;
+            let mid = res.halfHourFee;
+            let high = res.fastestFee;
+            return low;
+        } else {
+            return def_ppb;
+        }
+    } catch (err) {
+        console.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
+        return def_ppb;
+    }
 }
 
 function satoshiToBTC(value)
@@ -176,22 +136,20 @@ function satoshiToBTC(value)
 	return value * 0.00000001;
 }
 
-function getBalance(address, callback)
-{
-	let url = base_url+"/addrs/"+address+"/balance?token="+token;
-	request(url, function (error, response, body)
-	{
-		if (!error && response.statusCode == 200)
-		{
-			let json = JSON.parse(body);
-			if(typeof json != 'undefined')
-			{
-				console.log("Final balance for address " + address + " = ", json.final_balance);
-				callback(json.final_balance);
-			}
-		}
-		else throw error;
-	});
+async function getBalance(address) {
+    let url = base_url + "/addrs/" + address + "/balance?token=" + token;
+    try {
+        const response = await axios.get(url);
+        const json = response.data;
+        if (typeof json !== 'undefined') {
+            console.log("Final balance for address " + address + " = ", json.final_balance);
+            return json.final_balance;
+        } else {
+            throw new Error('No balance found for address');
+        }
+    } catch (err) {
+        throw err;
+    }
 }
 
 function generateNewAddress(oldAddy)

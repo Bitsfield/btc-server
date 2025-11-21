@@ -1,5 +1,5 @@
 const bitcoin = require('bitcoinjs-lib');
-const request = require('request');
+const axios = require('axios');
 
 const private_wif = "BwkjHbUKpn7NWdrXbYodLouj8h5Tjp6Q9s1BCTLdVMhPR5VBMzpB";
 const token = "0e7f39dde5b7442985566fa85f9ebb1c";
@@ -25,30 +25,18 @@ function satoshiToBTC(value)
 	return value * 0.00000001;
 }
 
-function broadcast_tx(tx)
-{
-	console.log("tx in hex = ", tx.toHex());
-	var push_url = base_url+"/txs/push?token="+token;
-	var options = {
-		uri: push_url,
-		method: 'POST',
-		json: {
-			"tx": tx.toHex()
-		}
-	};
-
-	request(options, function(err, httpResponse, body)
-	{
-		if(err)
-		{
-			console.error('Request failed:', err);
-		}
-		else
-		{
-			console.log('Broadcast results:', body);
-			console.log("Transaction send with hash:", tx.getId());
-		}
-	});
+async function broadcast_tx(tx) {
+    console.log("tx in hex = ", tx.toHex());
+    var push_url = base_url + "/txs/push?token=" + token;
+    try {
+        const response = await axios.post(push_url, { tx: tx.toHex() });
+        console.log('Broadcast results:', response.data);
+        console.log("Transaction send with hash:", tx.getId());
+        return response.data;
+    } catch (err) {
+        console.error('Request failed:', err);
+        throw err;
+    }
 }
 
 function getSourceAddy()
@@ -64,71 +52,57 @@ function getChangeAddy()
 
 }
 
-function getUnspent(address)
-{
-	var url = base_url+"/addrs/"+saddress+"?unspentOnly=true&token="+token;
-	request(url, function (error, response, body)
-	{
-		if (!error && response.statusCode == 200)
-		{
-			var json = JSON.parse(body);
-			if(typeof json != 'undefined' && typeof json["txrefs"] != 'undefined')
-			{
-				console.log("JSON unspent", json["txrefs"][0]);
-				console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
-				return json["txrefs"][0];
-			}
-		}
-	});
-	return null;
+async function getUnspent(address) {
+    var url = base_url + "/addrs/" + address + "?unspentOnly=true&token=" + token;
+    try {
+        const response = await axios.get(url);
+        const json = response.data;
+        if (typeof json !== 'undefined' && typeof json["txrefs"] !== 'undefined') {
+            console.log("JSON unspent", json["txrefs"][0]);
+            console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
+            return json["txrefs"][0];
+        }
+        return null;
+    } catch (err) {
+        console.error(err);
+        return null;
+    }
 }
 
-function getBalance(address)
-{
-	var url = base_url+"/addrs/"+address+"/balance?token="+token;
-	request(url, function (error, response, body)
-	{
-		if (!error && response.statusCode == 200)
-		{
-			var json = JSON.parse(body);
-			if(typeof json != 'undefined')
-			{
-				console.log("Final balance for address " + address + " = ", json.final_balance);
-				return json.final_balance;
-			}
-		}
-	});
-	return 0;
+async function getBalance(address) {
+    var url = base_url + "/addrs/" + address + "/balance?token=" + token;
+    try {
+        const response = await axios.get(url);
+        const json = response.data;
+        if (typeof json !== 'undefined') {
+            console.log("Final balance for address " + address + " = ", json.final_balance);
+            return json.final_balance;
+        }
+        return 0;
+    } catch (err) {
+        console.error(err);
+        return 0;
+    }
 }
 
-function getPricePerByte(priority)
-{
-	//{"fastestFee":220,"halfHourFee":210,"hourFee":120}
-	var def_ppb = 50;
-	var url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
-	try
-	{
-		request(url, function (error, response, body)
-		{
-			if (!error && response.statusCode == 200)
-			{
-				var res = JSON.parse(body);
-				if(typeof res != 'undefined' && res != null)
-				{
-					var low = res.hourFee;
-					var mid = res.halfHourFee;
-					var high = res.fastestFee
-
-					return mid;
-				}
-			}
-		});
-	}
-	catch(err)
-	{
-		consol.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
-		return def_ppb;
-	}
+async function getPricePerByte(priority) {
+    //{"fastestFee":220,"halfHourFee":210,"hourFee":120}
+    var def_ppb = 50;
+    var url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
+    try {
+        const response = await axios.get(url);
+        const res = response.data;
+        if (typeof res !== 'undefined' && res != null) {
+            var low = res.hourFee;
+            var mid = res.halfHourFee;
+            var high = res.fastestFee;
+            return mid;
+        }
+        return def_ppb;
+    } catch (err) {
+        console.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
+        return def_ppb;
+    }
 }
 
 function getNoOfBytes(ins, outs)
@@ -137,44 +111,39 @@ function getNoOfBytes(ins, outs)
 	return bytes;
 }
 
-function getTxFee(ins, outs, priority)
-{
-	var price_per_byte = getPricePerByte(priority);
-	var bytes = getNoOfBytes(ins, outs);
-	return price_per_byte * bytes;
+async function getTxFee(ins, outs, priority) {
+    var price_per_byte = await getPricePerByte(priority);
+    var bytes = getNoOfBytes(ins, outs);
+    return price_per_byte * bytes;
 }
 
-function proccess(amount, address)
-{
-	var source_address = getSourceAddy();
-	var tx_fee = getTxFee(amount);
-	var balance = getBalance(source_address);
-	var unspent = getUnspent(source_address);
+async function proccess(amount, address) {
+    var source_address = getSourceAddy();
+    var tx_fee = await getTxFee(amount);
+    var balance = await getBalance(source_address);
+    var unspent = await getUnspent(source_address);
 
-	if(balance >= (amount+tx_fee))
-	{
-		console.log("Unspent value (BTC) = ", satoshiToBTC(balance));
-		console.log("Tx fee (BTC) = ", satoshiToBTC(tx_fee));
-		console.log("Withdraw amount (BTC) = ", satoshiToBTC(amount));
-		console.log("TransactionBuilder input tx_hash = ", unspent.tx_hash);
-		console.log("TransactionBuilder input tx_output_n = ", unspent.tx_output_n);
+    if (balance >= (amount + tx_fee)) {
+        console.log("Unspent value (BTC) = ", satoshiToBTC(balance));
+        console.log("Tx fee (BTC) = ", satoshiToBTC(tx_fee));
+        console.log("Withdraw amount (BTC) = ", satoshiToBTC(amount));
+        console.log("TransactionBuilder input tx_hash = ", unspent.tx_hash);
+        console.log("TransactionBuilder input tx_output_n = ", unspent.tx_output_n);
 
-		var txb = new bitcoin.TransactionBuilder(network);
-		
-		txb.addInput(unspent.tx_hash, unspent.tx_output_n);
-		txb.addOutput(dest_address, withdraw_amount);
+        var txb = new bitcoin.TransactionBuilder(network);
 
-		txb.sign(0, keyPair);
-		var tx = txb.build();
+        txb.addInput(unspent.tx_hash, unspent.tx_output_n);
+        txb.addOutput(dest_address, withdraw_amount);
 
-		console.log("tx = ", tx);
+        txb.sign(0, keyPair);
+        var tx = txb.build();
 
-		broadcast_tx(tx);
-	}
-	else
-	{
-		console.log("Insufficient balance to complete transaction.");
-	}
+        console.log("tx = ", tx);
+
+        await broadcast_tx(tx);
+    } else {
+        console.log("Insufficient balance to complete transaction.");
+    }
 }
 
 function newWallet()
