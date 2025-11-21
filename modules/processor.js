@@ -1,37 +1,38 @@
 
 const database = require('./database.js');
-
 const utils = require('./utils.js');
 
-const saveRequest = function(token, data, success, failure)
+async function saveRequest(token, data)
 {
+	if(typeof token === 'undefined' || token.indexOf('EKOINX') === -1) {
+		throw new Error('Unauthorized');
+	}
+
 	token = token.replace("EKOINX ", "");
-	data.ref = new Buffer(token.substr(0, 10) + new Date().getTime()).toString("base64");
+	data.ref = Buffer.from(token.substr(0, 10) + new Date().getTime().toString()).toString("base64");
 	data.status = utils.PENDING;
 	data.remarks = "TRANSACTION RECEIVED " + new Date();
 
-	let cipher = utils.getToken(data);
+	const cipher = utils.getToken(data);
 
 	console.log("token: " + token);
 	console.log('cipher: ' + cipher);
 
-	if(token == cipher)
+	if(token !== cipher)
 	{
-		console.log(data);
-		database.saveRequest(data, success);
-   	}
-    else
-    {
-    	failure();
-    }
+		throw new Error('Unauthorized');
+	}
+
+	console.log(data);
+	return database.saveRequest(data);
 }
 
-function getActiveAddys(callback, error)
+async function getActiveAddys()
 {
-	return database.getActiveAddys(callback, error);
+	return database.getActiveAddys();
 }
 
 module.exports = {
-	saveRequest : saveRequest,
-	getActiveAddys: getActiveAddys
-}
+	saveRequest,
+	getActiveAddys
+};

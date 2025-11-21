@@ -4,7 +4,7 @@
   "description": "Ekoinx Bitcoin Server",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "author": "Okezie Arukwe",
   "license": "ISC",
@@ -22,8 +22,13 @@
     "express": "^4.16.2",
     "helmet": "^3.9.0",
     "mysql2": "^1.5.1",
+    "request": "^2.88.2",
     "sequelize": "^4.32.1",
     "winston": "^2.4.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   },
   "repository": {
     "type": "git",
