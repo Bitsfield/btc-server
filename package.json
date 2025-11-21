@@ -4,7 +4,7 @@
   "description": "Ekoinx Bitcoin Server",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=test mocha test/ --exit --recursive"
   },
   "author": "Okezie Arukwe",
   "license": "ISC",
@@ -28,5 +28,11 @@
   "repository": {
     "type": "git",
     "url": "git://bitbucket.org/ekoinx/ekoin-btc-server"
+  },
+  "devDependencies": {
+    "chai": "^4.5.0",
+    "mocha": "^5.2.0",
+    "sinon": "^7.5.0",
+    "sqlite3": "^5.1.7"
   }
 }

@@ -1,19 +1,29 @@
 
-const db = require('../configs/database').mysql;
+const dbConfig = require('../configs/database').mysql;
 const Sequelize = require('sequelize');
-const sequelize = new Sequelize(db.dbase, db.user, db.pass,
-	{
-		host	: db.host,
-		dialect	: 'mysql',
-		pool	: {
-					max: 5,
-					min: 0,
-					acquire: 30000,
-					idle: 10000
-				},
-		operatorsAliases: false
-	}
-);
+const isTest = process.env.NODE_ENV === 'test';
+
+let sequelize;
+if (isTest) {
+  sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: ':memory:',
+    logging: false,
+    operatorsAliases: false
+  });
+} else {
+  sequelize = new Sequelize(dbConfig.dbase, dbConfig.user, dbConfig.pass, {
+    host: dbConfig.host,
+    dialect: 'mysql',
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    operatorsAliases: false
+  });
+}
 
 // load models
 var models = [
@@ -36,4 +46,6 @@ models.forEach( function(model) {
 // export connection
 module.exports.sequelize = sequelize;
 
-sequelize.sync();
+sequelize.sync().catch(err => {
+  console.error('Database sync error:', err);
+});

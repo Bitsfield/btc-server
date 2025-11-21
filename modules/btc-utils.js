@@ -1,6 +1,8 @@
 const bitcoin = require('bitcoinjs-lib');
 const bip39 = require('bip39');
 const request = require('request');
+const util = require('util');
+const requestPromise = util.promisify(request);
 
 const network = bitcoin.networks.bcy.test;
 
@@ -9,21 +11,17 @@ const token = "0e7f39dde5b7442985566fa85f9ebb1c";
 const base_url = "https://api.blockcypher.com/v1/bcy/test";
 
 
-function processTransaction(newAddy, oldAddy, results, totalAmount, change, callback)
-{
-	getUnspent(oldAddy.addy, function(unspent)
-	{
-		try
-		{
-			let key = deriveNode(oldAddy.indx).keyPair;
-			let tx = buildTransaction(results, newAddy, change, unspent, key);
-			broadcastTx(tx, callback);
-		}
-		catch(err)
-		{
-			console.log("Farts! Something just happen right now...! ", err);
-		}
-	});
+async function processTransaction(newAddy, oldAddy, results, totalAmount, change) {
+  try {
+    const unspent = await getUnspent(oldAddy.addy);
+    let key = deriveNode(oldAddy.indx).keyPair;
+    let tx = buildTransaction(results, newAddy, change, unspent, key);
+    const { tx: broadcastTxObj, body: response } = await broadcastTx(tx);
+    return { tx: broadcastTxObj, response };
+  } catch (err) {
+    console.log("Farts! Something just happen right now...! ", err);
+    throw err;
+  }
 }
 
 function buildTransaction(outs, changeAddy, changeAmnt, unspent, key)
@@ -66,69 +64,56 @@ function buildTransaction(outs, changeAddy, changeAmnt, unspent, key)
 	}
 }
 
-function broadcastTx(tx, callback)
-{
-	console.log("tx in hex = ", tx.toHex());
-	let push_url = base_url+"/txs/push?token="+token;
-	let options = {
-		uri: push_url,
-		method: 'POST',
-		json: {
-			"tx": tx.toHex()
-		}
-	};
-
-	request(options, function(err, httpResponse, body)
-	{
-		if(err)
-		{
-			console.error('Request failed:', err);
-			throw err;
-		}
-		else
-		{
-			console.log('Broadcast results:', body);
-			console.log("Transaction sent with hash:", tx.getId());
-			callback(tx, body);
-		}
-	});
+async function broadcastTx(tx) {
+  console.log("tx in hex = ", tx.toHex());
+  let push_url = base_url + "/txs/push?token=" + token;
+  let options = {
+    uri: push_url,
+    method: 'POST',
+    json: {
+      "tx": tx.toHex()
+    }
+  };
+  try {
+    const [httpResponse, body] = await requestPromise(options);
+    if (httpResponse.statusCode !== 200) {
+      throw new Error('Broadcast failed: ' + httpResponse.statusCode);
+    }
+    console.log('Broadcast results:', body);
+    console.log("Transaction sent with hash:", tx.getId());
+    return { tx, body };
+  } catch (err) {
+    console.error('Request failed:', err);
+    throw err;
+  }
 }
 
-function getUnspent(address, callback)
-{
-	let url = base_url+"/addrs/"+address+"?unspentOnly=true&token="+token;
-	console.log("About to query url "+url+" for unspent outputs of address "+address);
-	request(url, function (error, response, body)
-	{
-		if(error)
-		{
-			console.error(error);
-			throw error;
-		}
-		else if(response.statusCode == 200)
-		{
-			let json = JSON.parse(body);
-			if(typeof json != 'undefined' && typeof json["txrefs"] != 'undefined')
-			{
-				console.log("JSON unspent", json["txrefs"]);
-				console.log("Found an unspent transaction output with ", satoshiToBTC(json["txrefs"][0].value), " BTC.");
-				callback(json["txrefs"]);
-			}
-			else
-				throw "No unspent Transaction outputs Found!";
-		}
-		else
-			throw "Could not retrieve unspent outputs!";
-	});
+async function getUnspent(address) {
+  let url = base_url + "/addrs/" + address + "?unspentOnly=true&token=" + token;
+  console.log("About to query url " + url + " for unspent outputs of address " + address);
+  try {
+    const [response, bodyStr] = await requestPromise(url);
+    if (response.statusCode !== 200) {
+      throw new Error("Could not retrieve unspent outputs! Status: " + response.statusCode);
+    }
+    let json = JSON.parse(bodyStr);
+    if (json && typeof json.txrefs !== 'undefined') {
+      console.log("JSON unspent", json.txrefs);
+      console.log("Found an unspent transaction output with ", satoshiToBTC(json.txrefs[0].value), " BTC.");
+      return json.txrefs;
+    } else {
+      throw new Error("No unspent Transaction outputs Found!");
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 }
 
-function getTxFee(ins, outs, priority, callback)
-{
-	getPricePerByte(priority, function(pricePerByte)
-	{
-		let noOfBytes = getNoOfBytes(ins, outs);
-		callback(pricePerByte * noOfBytes);
-	});
+async function getTxFee(ins, outs, priority) {
+  const pricePerByte = await getPricePerByte(priority);
+  let noOfBytes = getNoOfBytes(ins, outs);
+  return pricePerByte * noOfBytes;
 }
 
 function getNoOfBytes(ins, outs)
@@ -140,35 +125,27 @@ function getNoOfBytes(ins, outs)
 	return bytes;
 }
 
-function getPricePerByte(priority, callback)
-{
-	//{"fastestFee":220,"halfHourFee":210,"hourFee":120}
-	let def_ppb = 50;
-	let url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
-	try
-	{
-		request(url, function (error, response, body)
-		{
-			if (!error && response.statusCode == 200)
-			{
-				let res = JSON.parse(body);
-				if(typeof res != 'undefined' && res != null)
-				{
-					let low = res.hourFee;
-					let mid = res.halfHourFee;
-					let high = res.fastestFee
-
-					callback(low);
-				}
-			}
-			else throw error;
-		});
-	}
-	catch(err)
-	{
-		consol.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
-		return def_ppb;
-	}
+async function getPricePerByte(priority) {
+  //{"fastestFee":220,"halfHourFee":210,"hourFee":120}
+  let def_ppb = 50;
+  let url = "https://bitcoinfees.earn.com/api/v1/fees/recommended";
+  try {
+    const [response, bodyStr] = await requestPromise(url);
+    if (response.statusCode !== 200) {
+      throw new Error('Failed to get fee recommendation');
+    }
+    let res = JSON.parse(bodyStr);
+    if (res && res !== null) {
+      let low = res.hourFee;
+      // Note: priority not used, always using low (hourFee)
+      return low;
+    } else {
+      return def_ppb;
+    }
+  } catch (err) {
+    console.log('Could not retrieve recommended price per tx byte. Will use set default instead.');
+    return def_ppb;
+  }
 }
 
 function satoshiToBTC(value)
@@ -176,22 +153,22 @@ function satoshiToBTC(value)
 	return value * 0.00000001;
 }
 
-function getBalance(address, callback)
-{
-	let url = base_url+"/addrs/"+address+"/balance?token="+token;
-	request(url, function (error, response, body)
-	{
-		if (!error && response.statusCode == 200)
-		{
-			let json = JSON.parse(body);
-			if(typeof json != 'undefined')
-			{
-				console.log("Final balance for address " + address + " = ", json.final_balance);
-				callback(json.final_balance);
-			}
-		}
-		else throw error;
-	});
+async function getBalance(address) {
+  let url = base_url + "/addrs/" + address + "/balance?token=" + token;
+  try {
+    const [response, bodyStr] = await requestPromise(url);
+    if (response.statusCode !== 200) {
+      throw new Error('Failed to get balance');
+    }
+    let json = JSON.parse(bodyStr);
+    if (json) {
+      console.log("Final balance for address " + address + " = ", json.final_balance);
+      return json.final_balance;
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 }
 
 function generateNewAddress(oldAddy)

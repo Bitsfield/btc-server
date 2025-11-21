@@ -6,54 +6,57 @@ const Op = require('sequelize').Op;
 
 module.exports = {
 
-	saveRequest : function(data, callback) { 
-		models.Req.create(data).then(callback);
+	saveRequest : async function(data) { 
+		return await models.Req.create(data);
 	},
 
-	getCurrAddy : function(callback) { 
-		models.Addy.findOne({where: {'active': true, 'spent': false}}).then(callback);
+	getCurrAddy : async function() { 
+		return await models.Addy.findOne({where: {'active': true, 'spent': false}});
 	},
 
-	getRequestBatch : function(callback) {
-		models.Req.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } ).then(callback);
+	getRequestBatch : async function() {
+		return await models.Req.findAll( { where: {'status': utils.PENDING }, limit : LIMIT } );
 	},
 
-	saveAddy : function(addy, callback) {
-		models.Addy.create(addy).then(callback(addy));
+	saveAddy : async function(addy) {
+		const created = await models.Addy.create(addy);
+		return created;
 	},
 
-	incrementWalletAddyCount : function(walletId) {
-		models.Wallet.findById(walletId).then(wallet => {
+	incrementWalletAddyCount : async function(walletId) {
+		const wallet = await models.Wallet.findById(walletId);
+		if (wallet) {
 			console.log("Retrieved wallet: " + wallet);
-			wallet.increment('addresses', {by: 1});
-		});
+			await wallet.increment('addresses', {by: 1});
+		}
 	},
 
-	updateAddy : function(data, where) {
-		models.Addy.update(data, {where: where});
+	updateAddy : async function(data, where) {
+		return await models.Addy.update(data, {where: where});
 	},
 
-	setCurrAddy : function(newAddy, change, prevAddy) {
-		models.Addy.findOne({where: {'addy': newAddy}}).then(addy => {
+	setCurrAddy : async function(newAddy, change, prevAddy) {
+		const addy = await models.Addy.findOne({where: {'addy': newAddy}});
+		if (addy) {
 			addy.spent = false;
 			addy.active = true;
 			addy.balance = change;
-			prevAddy = prevAddy;
-			addy.save();
-		});
+			// prevAddy not used in original, but perhaps set prevAddy field if exists
+			await addy.save();
+		}
 	},
 
-	updateRequest : function(data, where) {
-		models.Req.update(data, {where: where});
+	updateRequest : async function(data, where) {
+		return await models.Req.update(data, {where: where});
 	},
 
-	getActiveAddys : function(callback, error)
+	getActiveAddys : async function()
 	{
-		models.Addy.findAll({where: {'active': true}}).then(callback).catch(error);
+		return await models.Addy.findAll({where: {'active': true}});
 	},
 
-	saveTransaction : function(trans, cb, err) {
-		models.Tran.create(trans).then(cb).catch(err);
+	saveTransaction : async function(trans) {
+		return await models.Tran.create(trans);
 	}
 }
 
