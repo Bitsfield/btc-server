@@ -3,7 +3,7 @@ const database = require('./database.js');
 
 const utils = require('./utils.js');
 
-const saveRequest = function(token, data, success, failure)
+const saveRequest = async function(token, data)
 {
 	token = token.replace("EKOINX ", "");
 	data.ref = new Buffer(token.substr(0, 10) + new Date().getTime()).toString("base64");
@@ -18,17 +18,17 @@ const saveRequest = function(token, data, success, failure)
 	if(token == cipher)
 	{
 		console.log(data);
-		database.saveRequest(data, success);
+		return await database.saveRequest(data);
    	}
     else
     {
-    	failure();
+    	throw new Error("Unauthorized");
     }
 }
 
-function getActiveAddys(callback, error)
+async function getActiveAddys()
 {
-	return database.getActiveAddys(callback, error);
+	return await database.getActiveAddys();
 }
 
 module.exports = {

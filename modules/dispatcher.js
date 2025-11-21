@@ -1,131 +1,116 @@
-
 const db = require('./database.js');
 const btc = require('./btc-utils.js');
 const dateFormat = require('dateformat');
 
-function test(callback)
+async function test()
 {
-	dispatch(callback);
-	// let newAddy = btc.generateRootAddress();
-	// let index = 0;
-	// let path = "m/0'/0/"+index;
-	// addy = {
-	// 	walletId 	: 	1,
-	// 	addy 		: 	newAddy,
-	// 	path 		: 	path,
-	// 	hardened 	: 	false,
-	// 	spent 		: 	false,
-	// 	active 		: 	true,
-	// 	balance 	: 	0,
-	// 	prevAddy 	: 	null,
-	// 	indx 		: 	index
-	// };
-	// db.saveAddy(addy, callback);
+	return await dispatch();
 }
 
-function dispatch(callback)
+async function dispatch()
 {
 	console.log('Dispatcher has been dispatched!!!!!');
-	getPendingTransactions( function(results)
-	{
+	try {
+		const results = await getPendingTransactions();
 		// console.log(results);
 		console.log("Retrieved pending transactions...");
+		
 		if(typeof results != 'undefined' && results.length > 0)
 		{
-			getCurrentAddress( function(currAddy)
-			{
-				console.log("Retrieved current address", currAddy);
-				console.log("Available balance: " + currAddy.balance);
+			const currAddy = await getCurrentAddress();
+			console.log("Retrieved current address", currAddy);
+			console.log("Available balance: " + currAddy.balance);
 
-				let totalAmount = getTotalRetrievedTransAmount(results);
-				console.log("Retrieved total transaction amount " + totalAmount);
-				if(currAddy.balance > totalAmount)
-				{
-					console.log("About to process transaction...");
-					processTransaction(currAddy, results, totalAmount, callback);
-				}
-				else
-				{
-					//perform some voodoo here to
-					//build transaction up till available balance;
-					//remember miners fee o!
-					console.log("Transaction amount is more than the available wallet balance.");
-					console.log("Transaction processing aborted!");
-					callback("sorry we don't have enough funds to handle this transaction! *sad face*")
-				}
-			} );
+			let totalAmount = getTotalRetrievedTransAmount(results);
+			console.log("Retrieved total transaction amount " + totalAmount);
+			
+			if(currAddy.balance > totalAmount)
+			{
+				console.log("About to process transaction...");
+				return await processTransaction(currAddy, results, totalAmount);
+			}
+			else
+			{
+				//perform some voodoo here to
+				//build transaction up till available balance;
+				//remember miners fee o!
+				console.log("Transaction amount is more than the available wallet balance.");
+				console.log("Transaction processing aborted!");
+				return "sorry we don't have enough funds to handle this transaction! *sad face*";
+			}
 		}
 		else
 		{
 			console.log("No pending transactions to process. -_- ");
-			callback("no pending transactions!!!!!!!!!!!");
+			return "no pending transactions!!!!!!!!!!!";
 		}
-	} );
+	} catch (error) {
+		console.error("Error in dispatcher:", error);
+		throw error;
+	}
 }
 
-function processTransaction (currAddy, results, totalAmount, callback)
+async function processTransaction (currAddy, results, totalAmount)
 {
 	let newAddy = btc.generateNewAddress(currAddy);
 	console.log("Generated new address: " + newAddy);
-	saveNewAddy(newAddy, currAddy, function(addy)
+	
+	const savedAddy = await saveNewAddy(newAddy, currAddy);
+	console.log("Saved new address to database....");
+	
+	let len = results.length + 1;
+	console.log("Transactions output lenght = " + len);
+
+	const transFee = await btc.getTxFee(1, len, 'low');
+	console.log("Calculated transaction fee..: " + transFee);
+
+	let change = 0;
+	if(currAddy.balance > (totalAmount + transFee))
 	{
-		console.log("Saved new address to database....");
-		let len = results.length + 1;
-		console.log("Transactions output lenght = " + len);
+		change = currAddy.balance - totalAmount - transFee;
+	}
+	
+	console.log("Calculated change amount...: " + change);
 
-		btc.getTxFee(1, len, 'low', function(transFee)
-		{
-			console.log("Calculated transaction fee..: " + transFee);
+	const response = await btc.processTransaction(newAddy, currAddy, results, totalAmount, change);
+	const tx = response.tx;
+	
+	console.log("Finished processing bitcoin transaction...");
+	//do something when transaction is processed
 
-			let change = 0;
-			if(currAddy.balance > (totalAmount + transFee))
-			{
-				change = currAddy.balance - totalAmount - transFee;
-			}
-			
-			console.log("Calculated change amount...: " + change);
+	//saveTransactionObject in db;
+	let addys = getAddys(results) + "," + newAddy;
+	await saveNewTransaction(tx, response, addys, totalAmount);
 
-			btc.processTransaction(newAddy, currAddy, results, totalAmount, change, function(tx, response)
-			{
-				console.log("Finished processing bitcoin transaction...");
-				//do something when transaction is processed
+	await db.updateAddy({
+		balance: 0, 
+		active: false, 
+		spent: true, 
+		nextAddy: newAddy, 
+		spentOn: dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')
+	}, {id: currAddy.id});
 
-				//saveTransactionObject in db;
-				let addys = getAddys(results) + "," + newAddy;
-				saveNewTransaction(tx, response, addys, totalAmount);
+	await db.setCurrAddy(newAddy, change, currAddy.addy);
 
-				db.updateAddy({
-					balance: 0, 
-					active: false, 
-					spent: true, 
-					nextAddy: newAddy, 
-					spentOn: dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')
-				}, {id: currAddy.id});
+	for (var i = results.length - 1; i >= 0; i--)
+	{
+		await db.updateRequest({
+			status: 'PUSHED', 
+			hash: response.tx.getId() // response.tx is likely the bitcoinjs object, so getId()
+		}, { id: results[i].id });
+	}
 
-				db.setCurrAddy(newAddy, change, currAddy.addy);
-
-				for (var i = results.length - 1; i >= 0; i--)
-				{
-					db.updateRequest({
-						status: 'PUSHED', 
-						hash: response.tx.hash
-					}, { id: results[i].id });
-				}
-
-				callback(response);
-			});
-		});
-	});
+	return response;
 }
 
-function getPendingTransactions(callback)
+async function getPendingTransactions()
 {
-	db.getRequestBatch(callback);
+	return await db.getRequestBatch();
 }
 
-function getCurrentAddress(callback)
+async function getCurrentAddress()
 {
-	db.getCurrAddy(callback);
+	return await db.getCurrAddy();
 }
 
 function getTotalRetrievedTransAmount(results)
@@ -139,11 +124,11 @@ function getTotalRetrievedTransAmount(results)
 	return val;
 }
 
-function saveNewAddy(newAddy, oldAddy, callback)
+async function saveNewAddy(newAddy, oldAddy)
 {
 	let index = oldAddy.indx + 1;
 	let path = "m/0'/0/"+index;
-	addy = {
+	let addy = {
 		walletId 	: 	oldAddy.walletId,
 		addy 		: 	newAddy,
 		path 		: 	path,
@@ -154,21 +139,25 @@ function saveNewAddy(newAddy, oldAddy, callback)
 		prevAddy 	: 	oldAddy.addy,
 		indx 		: 	index
 	};
-	// callback();
 	// db.incrementWalletAddyCount(oldAddy.walletId);
-	db.saveAddy(addy, callback);
+	return await db.saveAddy(addy);
 }
 
 function getAddys(result)
 {
 	let addy = [];
 	for (var i = result.length - 1; i >= 0; i--) {
-		addy[i] += result[i].addy;
+		// This line looks suspicious in original code: addy[i] += result[i].addy; 
+		// addy[i] is undefined initially. += will result in NaN or "undefined..."
+		// Assuming intention was to push to array or concat strings.
+		// However, let's try to preserve original logic but fix potential bug if it matters, 
+		// or just do what it probably meant:
+		addy.push(result[i].addy);
 	}
 	return addy.toString();
 }
 
-function saveNewTransaction(tx, resp, addys, value)
+async function saveNewTransaction(tx, resp, addys, value)
 {
 	let trans = {
 		addys : 	addys,
@@ -178,15 +167,13 @@ function saveNewTransaction(tx, resp, addys, value)
 		status 	: 	'PUSHED'
 	};
 
-	db.saveTransaction(trans, function()
-	{
+	try {
+		await db.saveTransaction(trans);
 		console.log("Transaction has been saved successfully. Transaction hash is: " + tx.getId());
-	},
-	function(error)
-	{
-	 console.error("Error while saving transaction to database!", error);
-	});
-
+	} catch (error) {
+		console.error("Error while saving transaction to database!", error);
+		throw error;
+	}
 }
 
 

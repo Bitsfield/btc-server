@@ -19,13 +19,16 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get('/', function(req, res) { res.send("Hello Friend!"); } );
 
 //default homepage
-app.get('/test', function(req, res) 
+app.get('/test', async function(req, res) 
 {
 	console.log("testing!!!!!!!1");
-	dispatcher.test(function(response){
+	try {
+		let response = await dispatcher.test();
 		res.json({code: 0, status:'completed!', data: response});
-	});
-	// res.send("testing.....!!!!!!!");
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({code: 1, status: 'error', data: error.toString()});
+	}
 });
 
 //get app status
@@ -56,14 +59,19 @@ app.get('/token/:value/:addy/:userId/:email', function(request, response)
 });
 
 //get active address
-app.get('/addy/active', function(req, res)
+app.get('/addy/active', async function(req, res)
 {
-	processor.getActiveAddys(active => { res.json({'addys': active}) }, () => {res.json({'status' : 'error!'}) });
-
+	try {
+		const active = await processor.getActiveAddys();
+		res.json({'addys': active});
+	} catch (error) {
+		console.error(error);
+		res.json({'status' : 'error!'});
+	}
 });
 
 //post transaction endpoint
-app.post('/transaction', function(request, response)
+app.post('/transaction', async function(request, response)
 {
 	const data = request.body;
 	if(!utils.validateRequest(data))
@@ -90,9 +98,17 @@ app.post('/transaction', function(request, response)
 			}
 			else
 			{
-				processor.saveRequest(token, data, 
-					()=>response.json(utils.returnSuccessfulResponse('Transaction received!', null)),
-					()=>response.status(401).json(utils.returnFailedResponse('Unauthorized', null)));
+				try {
+					await processor.saveRequest(token, data);
+					response.json(utils.returnSuccessfulResponse('Transaction received!', null));
+				} catch (error) {
+					if (error.message === "Unauthorized") {
+						response.status(401).json(utils.returnFailedResponse('Unauthorized', null));
+					} else {
+						console.error(error);
+						response.status(500).json(utils.returnFailedResponse('Internal Server Error', null));
+					}
+				}
 			}
 		}
 	}
@@ -127,5 +143,8 @@ Date.prototype.toMysqlFormat = function()
 // 	'Africa/Lagos'	//that's the timezone baybee!
 // );
 
-app.listen(process.env.PORT, () => console.log('EKOINX BTC SERVER RUNNING. LISTENING ON PORT: ' + process.env.PORT));
+if (require.main === module) {
+    app.listen(process.env.PORT || 3000, () => console.log('EKOINX BTC SERVER RUNNING. LISTENING ON PORT: ' + (process.env.PORT || 3000)));
+}
 
+module.exports = app;

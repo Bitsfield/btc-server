@@ -4,7 +4,7 @@
   "description": "Ekoinx Bitcoin Server",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "author": "Okezie Arukwe",
   "license": "ISC",
@@ -28,5 +28,10 @@
   "repository": {
     "type": "git",
     "url": "git://bitbucket.org/ekoinx/ekoin-btc-server"
+  },
+  "devDependencies": {
+    "axios": "^1.13.2",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
   }
 }
